@@ -730,9 +730,7 @@ function buildStand(cx,cz,opts){
      Outside hole = transparent. GIF on top at z=0.025. Zero bleeding. */
   var gifSc2=(_spd&&_spd.gifScale)||1.0;
   var gx02=(_spd&&_spd.gifOffX)||0, gy02=(_spd&&_spd.gifOffY)||0;
-  var stCanvasMap=useGifFrameSt
-    ?buildGifPhotoTex(stTex?stTex.image:null, gifSc2, gx02, gy02)
-    :buildPlainPhotoTex(stTex?stTex.image:null, gifSc2, gx02, gy02);
+  var stCanvasMap=buildGifPhotoTex(stTex?stTex.image:null, gifSc2, gx02, gy02);
   var canvasMat=new THREE.MeshLambertMaterial({
     map:stCanvasMap,transparent:true,side:THREE.FrontSide,alphaTest:0.01,depthWrite:false
   });
@@ -1148,23 +1146,6 @@ function texFromSrc(src,cb){
   var img=new Image();img.crossOrigin='anonymous';
   img.onload=function(){var t=new THREE.Texture(img);t.needsUpdate=true;t.minFilter=THREE.LinearFilter;t.encoding=THREE.sRGBEncoding;cb(t);};
   img.onerror=function(){cb(null);};img.src=src;
-}
-
-/* buildPlainPhotoTex: для простих рамок (без прозорої діри) — просто малює фото по центру */
-function buildPlainPhotoTex(imgEl, scale, offX, offY){
-  var S=512;
-  var cv=document.createElement('canvas');cv.width=S;cv.height=S;
-  var ctx=cv.getContext('2d');
-  ctx.clearRect(0,0,S,S);
-  if(!imgEl){var t0=new THREE.CanvasTexture(cv);t0.minFilter=THREE.LinearFilter;return t0;}
-  var sc=scale||1.0;
-  var ia=imgEl.naturalWidth/imgEl.naturalHeight;
-  var dw,dh;
-  if(ia>S/S){dh=S*sc;dw=dh*ia;}else{dw=S*sc;dh=dw/ia;}
-  ctx.drawImage(imgEl,S/2-dw/2+(offX||0)*S,S/2-dh/2-(offY||0)*S,dw,dh);
-  var t=new THREE.CanvasTexture(cv);
-  t.minFilter=THREE.LinearFilter;t.encoding=THREE.sRGBEncoding;
-  return t;
 }
 
 /* buildGifPhotoTex: composites photo into the hole area of a 512×512 canvas
