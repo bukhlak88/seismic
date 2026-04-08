@@ -6,8 +6,6 @@
 <title>Seismic Hall of Fame</title>
 <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/build/three.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
-<script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js"></script>
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
 body{overflow:hidden;background:#000;font-family:Georgia,serif}
@@ -179,8 +177,8 @@ canvas{display:block}
   <h1>Seismic<br>Hall of Fame</h1>
   <div class="sub" style="font-style:italic;font-size:.95rem">The most distinguished members of the Seismic community</div>
   <div class="divider"></div>
+  <div class="hint">CLICK &nbsp;·&nbsp; THEN USE WASD TO MOVE &nbsp;·&nbsp; SPACE TO JUMP</div>
   <button id="enterBtn">Enter the Hall</button>
-  <div class="hint" style="margin-top:.9rem;margin-bottom:0">CLICK &nbsp;·&nbsp; THEN USE WASD TO MOVE &nbsp;·&nbsp; SPACE TO JUMP</div>
 </div>
 <div id="hud">WASD рух &nbsp;|&nbsp; SPACE стрибок &nbsp;|&nbsp; Click — мишу &nbsp;|&nbsp; ESC — відпустити &nbsp;|&nbsp; E — панель</div>
 <div id="clickHint">Натисніть щоб дивитись</div>
@@ -478,27 +476,6 @@ canvas{display:block}
 <script>
 (function(){
 'use strict';
-
-/* ══════════════════════════════════════════════════════
-   🔥 FIREBASE CONFIG — вставте свої дані тут
-   Отримати: console.firebase.google.com → Проект → ⚙ → Налаштування → Ваші програми
-   ══════════════════════════════════════════════════════ */
-var FIREBASE_CONFIG={
-  apiKey:            "AIzaSyAQB6o3zaQskAg_TXB_OKdzeh2inzdZ-oY",
-  authDomain:        "seismic-62cbe.firebaseapp.com",
-  databaseURL:       "https://seismic-62cbe-default-rtdb.europe-west1.firebasedatabase.app",
-  projectId:         "seismic-62cbe",
-  storageBucket:     "seismic-62cbe.firebasestorage.app",
-  messagingSenderId: "506142912115",
-  appId:             "1:506142912115:web:4ddd51d5fda9d1fe2a8406"
-};
-var _fbReady=false, _fbDB=null, _fbListening=false;
-try{
-  firebase.initializeApp(FIREBASE_CONFIG);
-  _fbDB=firebase.database();
-  _fbReady=true;
-}catch(e){console.warn('Firebase init failed — using localStorage fallback',e);}
-
 /* secret admin: type adm */
 var _seq='';
 window.addEventListener('keydown',function(ev){
@@ -1627,92 +1604,56 @@ function saveDB(){
     var objs={};
     Object.keys(roomObjs).forEach(function(k){var o=roomObjs[k];objs[k]={type:o.type,gx:o.gx,gz:o.gz,ry:o.ry||0};});
     var sps=standPaintings.map(function(s){return{key:s.key,title:s.title,roleName:s.roleName,src:s.src,fc:s.fc};});
-    var data={
+    localStorage.setItem(STORE,JSON.stringify({
       db:db,uid:nextId,wu:wUsed,objs:objs,sps:sps,
       colH:colHeight,colW:colWidth,colMat:colMat,
       roomW:RW,roomH:RH,floorColor:floorColor,wallColor:wallColor,
       floorTile:floorTileRep,wallTile:wallTileRep
-    };
-    if(_fbReady&&_fbDB){
-      _fbDB.ref('gallery').set(data).catch(function(e){console.warn('Firebase save err',e);});
-    } else {
-      localStorage.setItem(STORE,JSON.stringify(data));
+    }));
+  }catch(e){}
+}
+
+function loadDB(){
+  try{
+    var raw=localStorage.getItem(STORE);if(!raw)return false;
+    var d=JSON.parse(raw);
+    if(d.uid)nextId=d.uid;
+    if(d.wu)wUsed=d.wu;
+    if(d.colH)colHeight=d.colH;
+    if(d.colW)colWidth=d.colW;
+    if(d.colMat)colMat=d.colMat;
+    if(d.roomW){RW=d.roomW;}
+    if(d.roomH){RH=d.roomH;}
+    if(d.floorColor)floorColor=d.floorColor;
+    if(d.wallColor)wallColor=d.wallColor;
+    if(d.floorTile)floorTileRep=d.floorTile;
+    if(d.wallTile)wallTileRep=d.wallTile;
+    /* restore stand paintings */
+    if(d.sps){
+      standPaintings=d.sps;
+      standPaintings.forEach(function(s){if(s.src)texFromSrc(s.src,function(tex){if(tex&&getStandPainting(s.key))getStandPainting(s.key).tex=tex;});});
     }
-  }catch(e){console.warn('saveDB',e);}
-}
-
-function applyDBData(d){
-  if(!d)return;
-  /* clear existing 3D objects */
-  p3d.forEach(function(p){scene.remove(p.group);});p3d=[];
-  Object.keys(roomObjs).forEach(function(k){scene.remove(roomObjs[k].mesh);});
-  roomObjs={};obstacles=[];standPaintings=[];
-  wUsed={N:0,S:0,E:0,W:0};db=[];nextId=1;
-
-  if(d.uid)nextId=d.uid;
-  if(d.wu)wUsed=d.wu;
-  if(d.colH){colHeight=d.colH;}
-  if(d.colW){colWidth=d.colW;}
-  if(d.colMat){colMat=d.colMat;}
-  if(d.roomW){RW=d.roomW;}
-  if(d.roomH){RH=d.roomH;}
-  if(d.floorColor){floorColor=d.floorColor;}
-  if(d.wallColor){wallColor=d.wallColor;}
-  if(d.floorTile){floorTileRep=d.floorTile;}
-  if(d.wallTile){wallTileRep=d.wallTile;}
-  if(d.sps){
-    standPaintings=d.sps;
-    standPaintings.forEach(function(s){if(s.src)texFromSrc(s.src,function(tex){if(tex&&getStandPainting(s.key))getStandPainting(s.key).tex=tex;});});
-  }
-  if(d.objs){
-    var prevObjType=curObjType;
-    Object.keys(d.objs).forEach(function(k){
-      var o=d.objs[k];curObjType=o.type;placeRoomObj(o.gx,o.gz);
-      if(o.ry&&roomObjs[k])rotateObj(k,o.ry);
-    });
-    curObjType=prevObjType;
-  }
-  if(d.db&&d.db.length){
-    d.db.forEach(function(di){
-      if(di.src&&di.src.length>5)texFromSrc(di.src,function(tex){buildPainting(tex,di);});
-      else buildPainting(null,di);
-      db.push(di);
-    });
-  }
-  buildRoom();buildLights();
-  buildRoomGridUI();renderList();updateEPosBounds();
-  document.getElementById('colH').value=colHeight;document.getElementById('colHV').textContent=colHeight.toFixed(1);
-  document.getElementById('colW').value=colWidth;document.getElementById('colWV').textContent=colWidth.toFixed(2);
-  document.getElementById('colMat').value=colMat;
-  document.getElementById('roomW').value=RW;document.getElementById('roomWV').textContent=RW;
-  document.getElementById('roomHH').value=RH;document.getElementById('roomHHV').textContent=RH;
-  document.getElementById('floorColor').value=floorColor;
-  document.getElementById('wallColor').value=wallColor;
-  document.getElementById('floorTile').value=floorTileRep;document.getElementById('floorTileV').textContent=floorTileRep;
-  document.getElementById('wallTile').value=wallTileRep;document.getElementById('wallTileV').textContent=wallTileRep;
-}
-
-function loadDB(cb){
-  if(_fbReady&&_fbDB){
-    _fbDB.ref('gallery').once('value').then(function(snap){
-      applyDBData(snap.val());
-      /* Live sync — non-admins see changes in real time */
-      if(!_fbListening){
-        _fbListening=true;
-        _fbDB.ref('gallery').on('value',function(s){
-          if(!isAdmin)applyDBData(s.val());
-        });
-      }
-      if(cb)cb();
-    }).catch(function(e){console.warn('Firebase loadDB',e);if(cb)cb();});
-  } else {
-    /* localStorage fallback */
-    try{
-      var raw=localStorage.getItem(STORE);if(!raw){if(cb)cb();return;}
-      applyDBData(JSON.parse(raw));
-    }catch(e){console.warn('loadDB fallback',e);}
-    if(cb)cb();
-  }
+    /* restore room objects */
+    if(d.objs){
+      var prevObjType=curObjType;
+      Object.keys(d.objs).forEach(function(k){
+        var o=d.objs[k];curObjType=o.type;placeRoomObj(o.gx,o.gz);
+        /* restore rotation */
+        if(o.ry&&roomObjs[k])rotateObj(k,o.ry);
+      });
+      curObjType=prevObjType;
+    }
+    /* restore paintings */
+    if(d.db&&d.db.length){
+      d.db.forEach(function(di){
+        if(di.src&&di.src.length>5)texFromSrc(di.src,function(tex){buildPainting(tex,di);});
+        else buildPainting(null,di);
+        db.push(di);
+      });
+      return true;
+    }
+  }catch(e){console.warn('loadDB',e);}
+  return false;
 }
 
 /* ══ PANEL UI ══ */
@@ -1729,6 +1670,15 @@ function togglePanel(){
   var p=document.getElementById('panel');
   if(!p.classList.contains('open')&&looking&&document.exitPointerLock)document.exitPointerLock();
   p.classList.toggle('open');
+}
+function openAdminPanel(){
+  var p=document.getElementById('panel');
+  if(looking&&document.exitPointerLock)document.exitPointerLock();
+  p.classList.add('open');
+  document.querySelectorAll('.ptab').forEach(function(t){t.classList.remove('on');});
+  document.querySelectorAll('.tabContent').forEach(function(t){t.classList.remove('on');});
+  document.getElementById('tAdmin').classList.add('on');
+  if(!isAdmin)setTimeout(function(){document.getElementById('authPwd').focus();},100);
 }
 document.getElementById('panToggle').onclick=togglePanel;
 document.getElementById('closePanel').onclick=function(){document.getElementById('panel').classList.remove('open');};
@@ -1762,8 +1712,7 @@ function openAdminPanel(){
   document.querySelectorAll('.ptab').forEach(function(t){t.classList.remove('on');});
   document.querySelectorAll('.tabContent').forEach(function(t){t.classList.remove('on');});
   document.getElementById('tAdmin').classList.add('on');
-  if(looking&&document.exitPointerLock)document.exitPointerLock();
-  document.getElementById('panel').classList.add('open');
+  if(!document.getElementById('panel').classList.contains('on')){togglePanel();}
   if(!isAdmin)setTimeout(function(){document.getElementById('authPwd').focus();},100);
 }
 /* dot still works as backup (invisible but clickable) */
@@ -2265,6 +2214,18 @@ prog(5);
 buildEditBadgePicker();
 buildBadgeSelect();
 loadDB();
+buildRoomGridUI();
+renderList();
+/* sync UI */
+document.getElementById('colH').value=colHeight;document.getElementById('colHV').textContent=colHeight.toFixed(1);
+document.getElementById('colW').value=colWidth;document.getElementById('colWV').textContent=colWidth.toFixed(2);
+document.getElementById('colMat').value=colMat;
+document.getElementById('roomW').value=RW;document.getElementById('roomWV').textContent=RW;
+document.getElementById('roomHH').value=RH;document.getElementById('roomHHV').textContent=RH;
+document.getElementById('floorColor').value=floorColor;
+document.getElementById('wallColor').value=wallColor;
+document.getElementById('floorTile').value=floorTileRep;document.getElementById('floorTileV').textContent=floorTileRep;
+document.getElementById('wallTile').value=wallTileRep;document.getElementById('wallTileV').textContent=wallTileRep;
 })();
 </script>
 </body>
