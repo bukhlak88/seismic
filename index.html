@@ -701,7 +701,7 @@ function buildStand(cx,cz,opts){
   var ft=0.06;
   var spBadgeKey=(opts&&opts.spData&&opts.spData.badgeKey)||'';
   /* ranks 1-2: plain frame; ranks 3-8: GIF frame; no frame for 1-2 at all */
-  var gifKey=(spBadgeKey==='frame-3'&&BADGES['frame-3'])?'frame-3':null;
+  var gifKey=(spBadgeKey&&BADGES[spBadgeKey])?spBadgeKey:null;
   var useGifFrameSt=!!gifKey;
 
   var HOLE_W_RATIO_ST=0.305, HOLE_H_RATIO_ST=0.373;
@@ -730,7 +730,9 @@ function buildStand(cx,cz,opts){
      Outside hole = transparent. GIF on top at z=0.025. Zero bleeding. */
   var gifSc2=(_spd&&_spd.gifScale)||1.0;
   var gx02=(_spd&&_spd.gifOffX)||0, gy02=(_spd&&_spd.gifOffY)||0;
-  var stCanvasMap=buildGifPhotoTex(stTex?stTex.image:null, gifSc2, gx02, gy02);
+  var stCanvasMap=useGifFrameSt
+    ?buildGifPhotoTexForKey(stTex?stTex.image:null, gifSc2, gx02, gy02, gifKey)
+    :buildPlainPhotoTex(stTex?stTex.image:null, gifSc2, gx02, gy02);
   var canvasMat=new THREE.MeshLambertMaterial({
     map:stCanvasMap,transparent:true,side:THREE.FrontSide,alphaTest:0.01,depthWrite:false
   });
@@ -1146,6 +1148,23 @@ function texFromSrc(src,cb){
   var img=new Image();img.crossOrigin='anonymous';
   img.onload=function(){var t=new THREE.Texture(img);t.needsUpdate=true;t.minFilter=THREE.LinearFilter;t.encoding=THREE.sRGBEncoding;cb(t);};
   img.onerror=function(){cb(null);};img.src=src;
+}
+
+/* buildPlainPhotoTex: для простих рамок (без прозорої діри) — просто малює фото по центру */
+function buildPlainPhotoTex(imgEl, scale, offX, offY){
+  var S=512;
+  var cv=document.createElement('canvas');cv.width=S;cv.height=S;
+  var ctx=cv.getContext('2d');
+  ctx.clearRect(0,0,S,S);
+  if(!imgEl){var t0=new THREE.CanvasTexture(cv);t0.minFilter=THREE.LinearFilter;return t0;}
+  var sc=scale||1.0;
+  var ia=imgEl.naturalWidth/imgEl.naturalHeight;
+  var dw,dh;
+  if(ia>S/S){dh=S*sc;dw=dh*ia;}else{dw=S*sc;dh=dw/ia;}
+  ctx.drawImage(imgEl,S/2-dw/2+(offX||0)*S,S/2-dh/2-(offY||0)*S,dw,dh);
+  var t=new THREE.CanvasTexture(cv);
+  t.minFilter=THREE.LinearFilter;t.encoding=THREE.sRGBEncoding;
+  return t;
 }
 
 /* buildGifPhotoTex: composites photo into the hole area of a 512×512 canvas
@@ -1626,7 +1645,7 @@ function saveDB(){
   try{
     var objs={};
     Object.keys(roomObjs).forEach(function(k){var o=roomObjs[k];objs[k]={type:o.type,gx:o.gx,gz:o.gz,ry:o.ry||0};});
-    var sps=standPaintings.map(function(s){return{key:s.key,title:s.title,roleName:s.roleName,src:s.src,fc:s.fc};});
+    var sps=standPaintings.map(function(s){return{key:s.key,title:s.title,roleName:s.roleName,src:s.src,fc:s.fc,badgeKey:s.badgeKey||'',gifScale:s.gifScale||1.0,gifOffX:s.gifOffX||0,gifOffY:s.gifOffY||0};});
     var data={
       db:db,uid:nextId,wu:wUsed,objs:objs,sps:sps,
       colH:colHeight,colW:colWidth,colMat:colMat,
@@ -2192,11 +2211,10 @@ document.getElementById('seApplyBtn').onclick=function(){
   var roleName=meta?meta.name:'';
 
   function applyToStand(tex,src){
-    var seHasGif2=(badgeKey==='frame-3');
     var spData={title:title,roleName:roleName,src:src||'',tex:tex,fc:fc,badgeKey:badgeKey,
-gifScale: seHasGif2 ? parseFloat(document.getElementById('seGifScale').value)||1.0 : undefined,
-      gifOffX:  seHasGif2 ? parseFloat(document.getElementById('seGifX').value)||0 : undefined,
-      gifOffY:  seHasGif2 ? parseFloat(document.getElementById('seGifY').value)||0 : undefined
+      gifScale: parseFloat(document.getElementById('seGifScale').value)||1.0,
+      gifOffX:  parseFloat(document.getElementById('seGifX').value)||0,
+      gifOffY:  parseFloat(document.getElementById('seGifY').value)||0
     };
     setStandPainting(activeStandKey,spData);
     /* fully rebuild stand to update nameplate + badge + frame color */
