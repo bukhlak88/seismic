@@ -497,7 +497,7 @@ try{
   firebase.initializeApp(FIREBASE_CONFIG);
   _fbDB=firebase.database();
   _fbReady=true;
-}catch(e){console.warn('Firebase init failed — localStorage fallback',e);}
+}catch(e){console.warn('Firebase init failed — using localStorage fallback',e);}
 
 /* secret admin: type adm */
 var _seq='';
@@ -1626,7 +1626,7 @@ function saveDB(){
   try{
     var objs={};
     Object.keys(roomObjs).forEach(function(k){var o=roomObjs[k];objs[k]={type:o.type,gx:o.gx,gz:o.gz,ry:o.ry||0};});
-    var sps=standPaintings.map(function(s){return{key:s.key,title:s.title,roleName:s.roleName,src:s.src,fc:s.fc,badgeKey:s.badgeKey||'',fw:s.fw||1.1,gifScale:s.gifScale||1.0,gifOffX:s.gifOffX||0,gifOffY:s.gifOffY||0};});
+    var sps=standPaintings.map(function(s){return{key:s.key,title:s.title,roleName:s.roleName,src:s.src,fc:s.fc};});
     var data={
       db:db,uid:nextId,wu:wUsed,objs:objs,sps:sps,
       colH:colHeight,colW:colWidth,colMat:colMat,
@@ -1692,20 +1692,26 @@ function applyDBData(d){
   document.getElementById('wallTile').value=wallTileRep;document.getElementById('wallTileV').textContent=wallTileRep;
 }
 
-function loadDB(){
+function loadDB(cb){
   if(_fbReady&&_fbDB){
     _fbDB.ref('gallery').once('value').then(function(snap){
-      if(snap.val())applyDBData(snap.val());
+      applyDBData(snap.val());
+      /* Live sync — non-admins see changes in real time */
       if(!_fbListening){
         _fbListening=true;
-        _fbDB.ref('gallery').on('value',function(s){if(!isAdmin&&s.val())applyDBData(s.val());});
+        _fbDB.ref('gallery').on('value',function(s){
+          if(!isAdmin)applyDBData(s.val());
+        });
       }
-    }).catch(function(e){console.warn('Firebase loadDB',e);});
+      if(cb)cb();
+    }).catch(function(e){console.warn('Firebase loadDB',e);if(cb)cb();});
   } else {
+    /* localStorage fallback */
     try{
-      var raw=localStorage.getItem(STORE);
-      if(raw)applyDBData(JSON.parse(raw));
-    }catch(e){console.warn('loadDB localStorage',e);}
+      var raw=localStorage.getItem(STORE);if(!raw){if(cb)cb();return;}
+      applyDBData(JSON.parse(raw));
+    }catch(e){console.warn('loadDB fallback',e);}
+    if(cb)cb();
   }
 }
 
@@ -2186,10 +2192,11 @@ document.getElementById('seApplyBtn').onclick=function(){
   var roleName=meta?meta.name:'';
 
   function applyToStand(tex,src){
+    var seHasGif2=(badgeKey==='frame-3');
     var spData={title:title,roleName:roleName,src:src||'',tex:tex,fc:fc,badgeKey:badgeKey,
-      gifScale: parseFloat(document.getElementById('seGifScale').value)||1.0,
-      gifOffX:  parseFloat(document.getElementById('seGifX').value)||0,
-      gifOffY:  parseFloat(document.getElementById('seGifY').value)||0
+gifScale: seHasGif2 ? parseFloat(document.getElementById('seGifScale').value)||1.0 : undefined,
+      gifOffX:  seHasGif2 ? parseFloat(document.getElementById('seGifX').value)||0 : undefined,
+      gifOffY:  seHasGif2 ? parseFloat(document.getElementById('seGifY').value)||0 : undefined
     };
     setStandPainting(activeStandKey,spData);
     /* fully rebuild stand to update nameplate + badge + frame color */
