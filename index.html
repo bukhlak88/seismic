@@ -1626,7 +1626,7 @@ function saveDB(){
   try{
     var objs={};
     Object.keys(roomObjs).forEach(function(k){var o=roomObjs[k];objs[k]={type:o.type,gx:o.gx,gz:o.gz,ry:o.ry||0};});
-    var sps=standPaintings.map(function(s){return{key:s.key,title:s.title,roleName:s.roleName,src:s.src,fc:s.fc};});
+    var sps=standPaintings.map(function(s){return{key:s.key,title:s.title,roleName:s.roleName,src:s.src,fc:s.fc,badgeKey:s.badgeKey||'',gifScale:s.gifScale||1.0,gifOffX:s.gifOffX||0,gifOffY:s.gifOffY||0};});
     var data={
       db:db,uid:nextId,wu:wUsed,objs:objs,sps:sps,
       colH:colHeight,colW:colWidth,colMat:colMat,
@@ -2192,11 +2192,10 @@ document.getElementById('seApplyBtn').onclick=function(){
   var roleName=meta?meta.name:'';
 
   function applyToStand(tex,src){
-    var seHasGif2=(badgeKey==='frame-3');
     var spData={title:title,roleName:roleName,src:src||'',tex:tex,fc:fc,badgeKey:badgeKey,
-gifScale: seHasGif2 ? parseFloat(document.getElementById('seGifScale').value)||1.0 : undefined,
-      gifOffX:  seHasGif2 ? parseFloat(document.getElementById('seGifX').value)||0 : undefined,
-      gifOffY:  seHasGif2 ? parseFloat(document.getElementById('seGifY').value)||0 : undefined
+      gifScale: parseFloat(document.getElementById('seGifScale').value)||1.0,
+      gifOffX:  parseFloat(document.getElementById('seGifX').value)||0,
+      gifOffY:  parseFloat(document.getElementById('seGifY').value)||0
     };
     setStandPainting(activeStandKey,spData);
     /* fully rebuild stand to update nameplate + badge + frame color */
