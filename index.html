@@ -6,8 +6,8 @@
 <title>Seismic Hall of Fame</title>
 <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/build/three.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
-<script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js" async></script>
+<script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js" async></script>
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
 body{overflow:hidden;background:#000;font-family:Georgia,serif}
@@ -493,11 +493,23 @@ var FIREBASE_CONFIG={
   appId:             "1:506142912115:web:4ddd51d5fda9d1fe2a8406"
 };
 var _fbReady=false, _fbDB=null, _fbListening=false;
-try{
-  firebase.initializeApp(FIREBASE_CONFIG);
-  _fbDB=firebase.database();
-  _fbReady=true;
-}catch(e){console.warn('Firebase init failed — using localStorage fallback',e);}
+function _initFirebase(){
+  try{
+    if(typeof firebase==='undefined'){setTimeout(_initFirebase,300);return;}
+    if(!firebase.apps||!firebase.apps.length)firebase.initializeApp(FIREBASE_CONFIG);
+    _fbDB=firebase.database();
+    _fbReady=true;
+    /* load from Firebase now that SDK is ready */
+    _fbDB.ref('gallery').once('value').then(function(snap){
+      if(snap.val())applyDBData(snap.val());
+      if(!_fbListening){
+        _fbListening=true;
+        _fbDB.ref('gallery').on('value',function(s){if(!isAdmin&&s.val())applyDBData(s.val());});
+      }
+    }).catch(function(e){console.warn('Firebase load err',e);});
+  }catch(e){console.warn('Firebase init failed',e);}
+}
+setTimeout(_initFirebase,500);
 
 /* secret admin: type adm */
 var _seq='';
@@ -1635,9 +1647,8 @@ function saveDB(){
     };
     if(_fbReady&&_fbDB){
       _fbDB.ref('gallery').set(data).catch(function(e){console.warn('Firebase save err',e);});
-    } else {
-      localStorage.setItem(STORE,JSON.stringify(data));
     }
+    localStorage.setItem(STORE,JSON.stringify(data));
   }catch(e){console.warn('saveDB',e);}
 }
 
@@ -1692,27 +1703,12 @@ function applyDBData(d){
   document.getElementById('wallTile').value=wallTileRep;document.getElementById('wallTileV').textContent=wallTileRep;
 }
 
-function loadDB(cb){
-  if(_fbReady&&_fbDB){
-    _fbDB.ref('gallery').once('value').then(function(snap){
-      applyDBData(snap.val());
-      /* Live sync — non-admins see changes in real time */
-      if(!_fbListening){
-        _fbListening=true;
-        _fbDB.ref('gallery').on('value',function(s){
-          if(!isAdmin)applyDBData(s.val());
-        });
-      }
-      if(cb)cb();
-    }).catch(function(e){console.warn('Firebase loadDB',e);if(cb)cb();});
-  } else {
-    /* localStorage fallback */
-    try{
-      var raw=localStorage.getItem(STORE);if(!raw){if(cb)cb();return;}
-      applyDBData(JSON.parse(raw));
-    }catch(e){console.warn('loadDB fallback',e);}
-    if(cb)cb();
-  }
+function loadDB(){
+  /* localStorage fallback — Firebase loads async via _initFirebase */
+  try{
+    var raw=localStorage.getItem(STORE);
+    if(raw)applyDBData(JSON.parse(raw));
+  }catch(e){console.warn('loadDB localStorage',e);}
 }
 
 /* ══ PANEL UI ══ */
